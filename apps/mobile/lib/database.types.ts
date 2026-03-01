@@ -63,6 +63,7 @@ export interface Database {
           status: "active" | "canceled";
           created_at: string;
           reminder_sent_at: string | null;
+          image_url: string | null;
         };
         Insert: {
           id?: string;
@@ -76,6 +77,7 @@ export interface Database {
           status?: "active" | "canceled";
           created_at?: string;
           reminder_sent_at?: string | null;
+          image_url?: string | null;
         };
         Update: {
           id?: string;
@@ -89,6 +91,7 @@ export interface Database {
           status?: "active" | "canceled";
           created_at?: string;
           reminder_sent_at?: string | null;
+          image_url?: string | null;
         };
       };
       event_members: {

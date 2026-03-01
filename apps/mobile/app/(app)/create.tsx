@@ -7,13 +7,17 @@ import {
   Modal,
   Pressable,
   ActivityIndicator,
+  Image,
+  TouchableOpacity,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, router } from "expo-router";
 import { supabase } from "../../lib/supabase";
+import { uploadEventPhoto } from "../../lib/storage";
 import { PrimaryButton, SecondaryButton } from "../../components/Button";
 import { Card } from "../../components/Card";
 
@@ -60,12 +64,14 @@ export default function CreateEventScreen() {
   const [editLoading, setEditLoading] = useState(isEditMode);
   const [userId, setUserId] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [eventPhoto, setEventPhoto] = useState<{ uri: string; base64: string; mimeType: string } | null>(null);
 
   const [showStartDate, setShowStartDate] = useState(false);
   const [showStartTime, setShowStartTime] = useState(false);
   const [showEndDate, setShowEndDate] = useState(false);
   const [showEndTime, setShowEndTime] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -96,6 +102,29 @@ export default function CreateEventScreen() {
       setEditLoading(false);
     });
   }, [editId]);
+
+  const pickEventPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission Denied", "Photo library access is required.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.8,
+      base64: true,
+    });
+    if (result.canceled || !result.assets[0]?.base64) return;
+    const asset = result.assets[0];
+    setEventPhoto({
+      uri: asset.uri,
+      base64: asset.base64!,
+      mimeType: asset.mimeType ?? "image/jpeg",
+    });
+  };
+
 
   const validateRequiredFields = (): FieldErrors => {
     const errors: FieldErrors = {};
@@ -266,6 +295,17 @@ export default function CreateEventScreen() {
         return;
       }
 
+      let imageUrl: string | null = null;
+      if (eventPhoto) {
+        try {
+          imageUrl = await uploadEventPhoto(user.id, eventPhoto.base64, eventPhoto.mimeType);
+        } catch {
+          Alert.alert("Error", "Failed to upload event photo");
+          setLoading(false);
+          return;
+        }
+      }
+
       // @ts-expect-error - Supabase type inference issue
       const { data: eventData, error } = await supabase.from("events").insert({
         host_id: user.id,
@@ -275,6 +315,7 @@ export default function CreateEventScreen() {
         location_text: location.trim(),
         capacity: capacityNum,
         description: description.trim() || null,
+        image_url: imageUrl,
         status: "active" as const,
       }).select("id").single();
 
@@ -304,6 +345,7 @@ export default function CreateEventScreen() {
               setLocation("");
               setCapacity("");
               setDescription("");
+              setEventPhoto(null);
               router.push("/(app)/feed");
             },
           },
@@ -473,6 +515,33 @@ export default function CreateEventScreen() {
             />
           </View>
 
+          <View className="mb-6">
+            <Text className="text-osu-dark mb-2 font-semibold">
+              Event Photo (Optional)
+            </Text>
+            <TouchableOpacity
+              onPress={pickEventPhoto}
+              className="bg-gray-50 border border-gray-200 rounded-lg overflow-hidden"
+            >
+              {eventPhoto ? (
+                <Image
+                  source={{ uri: eventPhoto.uri }}
+                  style={{ width: "100%", aspectRatio: 16 / 9 }}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View className="items-center justify-center py-8">
+                  <Text className="text-gray-400 text-sm">Tap to add a photo</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            {eventPhoto && (
+              <TouchableOpacity onPress={() => setEventPhoto(null)} className="mt-1">
+                <Text className="text-red-500 text-sm">Remove photo</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
           <PrimaryButton
             title={isEditMode ? "Review Changes" : "Review Event"}
             onPress={handleReview}
@@ -530,6 +599,17 @@ export default function CreateEventScreen() {
                 <Text className="text-base text-osu-dark">{description.trim()}</Text>
               </View>
             ) : null}
+
+            {eventPhoto && (
+              <View className="mb-3">
+                <Text className="text-xs font-semibold text-gray-400 uppercase mb-0.5">Photo</Text>
+                <Image
+                  source={{ uri: eventPhoto.uri }}
+                  style={{ width: "100%", aspectRatio: 16 / 9, borderRadius: 8, marginTop: 4 }}
+                  resizeMode="cover"
+                />
+              </View>
+            )}
 
             <View className="flex-row mt-6" style={{ gap: 12 }}>
               <View className="flex-1">
