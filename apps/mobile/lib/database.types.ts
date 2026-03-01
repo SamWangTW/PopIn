@@ -139,7 +139,10 @@ export interface Database {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      cancel_event: {
+        Args: { p_event_id: string };
+        Returns: void;
+      };
     };
     Enums: {
       [_ in never]: never;

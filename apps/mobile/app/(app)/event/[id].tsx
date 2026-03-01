@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { View, Text, ScrollView, Alert, ActivityIndicator, TouchableOpacity, Image } from "react-native";
-import { useLocalSearchParams, router } from "expo-router";
+import { useLocalSearchParams, router, useFocusEffect } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../../../lib/supabase";
 import { uploadEventPhoto } from "../../../lib/storage";
@@ -93,6 +93,15 @@ export default function EventDetailScreen() {
     }
   }, [id, userId]);
 
+  // Re-fetch whenever this screen comes back into focus (e.g. returning from edit)
+  useFocusEffect(
+    useCallback(() => {
+      if (id && userId) {
+        fetchEvent();
+      }
+    }, [id, userId])
+  );
+
   const handleJoin = async () => {
     if (!event || !userId) return;
     // Prevent duplicate fires if user taps rapidly
@@ -168,22 +177,22 @@ export default function EventDetailScreen() {
           style: "destructive",
           onPress: async () => {
             setActionLoading(true);
+            try {
+              const { error } = await supabase.rpc("cancel_event", {
+                p_event_id: event.id,
+              } as any);
 
-            const { error } = await (supabase.from("events") as any)
-              .update({ status: "canceled" })
-              .eq("id", event.id);
+              if (error) throw error;
 
-            setActionLoading(false);
-
-            if (error) {
-              Alert.alert("Error", "Failed to cancel event");
-              console.error(error);
-            } else {
-              // Notify all members except the host (fire-and-forget)
               notifyPush("cancel", event.id, userId);
               Alert.alert("Event Canceled", "Your event has been canceled.", [
                 { text: "OK", onPress: () => router.back() },
               ]);
+            } catch (err: any) {
+              console.error("[cancel] error:", err);
+              Alert.alert("Error", `Failed to cancel event: ${err?.message ?? "unknown error"}`);
+            } finally {
+              setActionLoading(false);
             }
           },
         },
@@ -391,7 +400,7 @@ const handleChangePhoto = async () => {
               <View style={{ gap: 10 }}>
                 <SecondaryButton
                   title="Edit Event"
-                  onPress={() => router.push(`/(app)/create?editId=${event.id}`)}
+                  onPress={() => router.push(`/(app)/edit-event?editId=${event.id}`)}
                   loading={false}
                 />
                 <SecondaryButton
