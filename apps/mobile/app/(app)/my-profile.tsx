@@ -218,6 +218,11 @@ export default function MyProfileScreen() {
 
   const displayNameText = profile.display_name || profile.email.split("@")[0];
   const initials = displayNameText.slice(0, 2).toUpperCase();
+  const rawAttendanceRate = Number(profile.attendance_rate ?? 0);
+  const attendanceRate =
+    rawAttendanceRate > 0 && rawAttendanceRate <= 1
+      ? Math.round(rawAttendanceRate * 100)
+      : Math.round(rawAttendanceRate);
 
   return (
     <KeyboardAwareScrollView
@@ -340,11 +345,19 @@ export default function MyProfileScreen() {
           {!editing && (
             <Card>
               <Text className="text-gray-600 font-semibold mb-3">Stats</Text>
-              <View className="items-center">
-                <Text className="text-2xl font-bold text-osu-scarlet">
-                  {profile.hosted_count}
-                </Text>
-                <Text className="text-gray-500 text-sm">Events Hosted</Text>
+              <View className="gap-3">
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-gray-500 text-sm">Events Hosted</Text>
+                  <Text className="text-xl font-bold text-osu-scarlet">
+                    {profile.hosted_count}
+                  </Text>
+                </View>
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-gray-500 text-sm">Attendance Rate</Text>
+                  <Text className="text-xl font-bold text-osu-scarlet">
+                    {attendanceRate}%
+                  </Text>
+                </View>
               </View>
             </Card>
           )}

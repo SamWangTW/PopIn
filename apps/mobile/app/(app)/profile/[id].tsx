@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,8 +6,9 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+  RefreshControl,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useFocusEffect } from "expo-router";
 
 const formatYear = (y: number) => (y === 6 ? "Graduate" : `Year ${y}`);
 import { supabase } from "../../../lib/supabase";
@@ -19,12 +20,17 @@ export default function ProfileScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [hostedEvents, setHostedEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    if (!id) return;
+  const fetchProfile = useCallback(
+    async (isPullToRefresh = false) => {
+      if (!id) return;
 
-    const fetchProfile = async () => {
-      setLoading(true);
+      if (isPullToRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
 
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
@@ -34,7 +40,11 @@ export default function ProfileScreen() {
 
       if (profileError) {
         Alert.alert("Error", "Failed to load profile");
-        setLoading(false);
+        if (isPullToRefresh) {
+          setRefreshing(false);
+        } else {
+          setLoading(false);
+        }
         return;
       }
 
@@ -48,11 +58,27 @@ export default function ProfileScreen() {
         .order("start_time", { ascending: true });
 
       setHostedEvents((eventsData as Event[]) ?? []);
-      setLoading(false);
-    };
+      if (isPullToRefresh) {
+        setRefreshing(false);
+      } else {
+        setLoading(false);
+      }
+    },
+    [id],
+  );
+
+  useEffect(() => {
+    if (!id) return;
 
     fetchProfile();
-  }, [id]);
+  }, [id, fetchProfile]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!id) return;
+      fetchProfile();
+    }, [id, fetchProfile]),
+  );
 
   if (loading) {
     return (
@@ -72,6 +98,11 @@ export default function ProfileScreen() {
 
   const displayName = profile.display_name || profile.email.split("@")[0];
   const initials = displayName.slice(0, 2).toUpperCase();
+  const rawAttendanceRate = Number(profile.attendance_rate ?? 0);
+  const attendanceRate =
+    rawAttendanceRate > 0 && rawAttendanceRate <= 1
+      ? Math.round(rawAttendanceRate * 100)
+      : Math.round(rawAttendanceRate);
 
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString("en-US", {
@@ -81,7 +112,16 @@ export default function ProfileScreen() {
     });
 
   return (
-    <ScrollView className="flex-1 bg-osu-light">
+    <ScrollView
+      className="flex-1 bg-osu-light"
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => fetchProfile(true)}
+          tintColor="#BB0000"
+        />
+      }
+    >
       <View className="p-4 gap-4">
         {/* Avatar + Name */}
         <Card>
@@ -124,11 +164,19 @@ export default function ProfileScreen() {
         {/* Stats */}
         <Card>
           <Text className="text-gray-600 font-semibold mb-3">Stats</Text>
-          <View className="items-center">
-            <Text className="text-2xl font-bold text-osu-scarlet">
-              {profile.hosted_count}
-            </Text>
-            <Text className="text-gray-500 text-sm">Events Hosted</Text>
+          <View className="gap-3">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-gray-500 text-sm">Events Hosted</Text>
+              <Text className="text-xl font-bold text-osu-scarlet">
+                {profile.hosted_count}
+              </Text>
+            </View>
+            <View className="flex-row items-center justify-between">
+              <Text className="text-gray-500 text-sm">Attendance Rate</Text>
+              <Text className="text-xl font-bold text-osu-scarlet">
+                {attendanceRate}%
+              </Text>
+            </View>
           </View>
         </Card>
 

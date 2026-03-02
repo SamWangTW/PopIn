@@ -45,7 +45,7 @@ export default function EventDetailScreen() {
       .select(
         `
         *,
-        host:profiles!events_host_id_fkey(id, email, display_name),
+        host:profiles!events_host_id_fkey(id, email, display_name, hosted_count),
         event_members(user_id)
       `,
       )
@@ -275,6 +275,7 @@ const handleChangePhoto = async () => {
   const attendeeCount = event.attendee_count || 0;
   const spotsLeft =
     event.capacity != null ? Math.max(event.capacity - attendeeCount, 0) : null;
+  const isFirstTimeHost = (event.host?.hosted_count ?? 0) <= 1;
   const scarcityCopy =
     attendeeCount === 0
       ? "Be the first to join 💪"
@@ -369,6 +370,11 @@ const handleChangePhoto = async () => {
                 {event.host?.display_name || event.host?.email.split("@")[0]}
               </Text>
             </TouchableOpacity>
+            {isFirstTimeHost && (
+              <View className="mt-2 self-start bg-osu-light px-2 py-1 rounded-full">
+                <Text className="text-osu-dark text-xs font-medium">First-time host 🆕</Text>
+              </View>
+            )}
           </View>
 
           {!isHost &&
