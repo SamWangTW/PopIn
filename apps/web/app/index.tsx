@@ -111,17 +111,25 @@ export default function AuthScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       className="flex-1"
     >
-      <ScrollView className="flex-1 bg-osu-light">
+      <ScrollView
+        className="flex-1 bg-osu-light"
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: "center",
+          paddingHorizontal: 24,
+          paddingVertical: 24,
+        }}
+      >
         <StatusBar style="dark" />
-        <View className="flex-1 justify-center px-6">
-          <View className="items-center mb-12">
+        <View className="w-full max-w-md self-center">
+          <View className="items-center mb-8">
             <Text className="text-5xl font-bold text-osu-scarlet mb-2">
               PopIn
             </Text>
             <Text className="text-lg text-osu-dark">OSU Student Events</Text>
           </View>
 
-          <View className="bg-white rounded-2xl p-6 shadow-lg">
+          <View className="w-full bg-white rounded-2xl p-6 shadow-lg">
             <Text className="text-2xl font-bold text-osu-dark mb-6">
               {otpSent ? "Verify Code" : "Sign In"}
             </Text>
