@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useFocusEffect } from "expo-router";
 import {
   View,
   Text,
@@ -161,9 +162,11 @@ export default function FeedScreen() {
     setLoading(false);
   }, [filter, userId, sortBy, userCoordinates]);
 
-  useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchEvents();
+    }, [fetchEvents])
+  );
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
