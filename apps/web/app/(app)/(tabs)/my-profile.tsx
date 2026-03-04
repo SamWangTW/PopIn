@@ -82,17 +82,7 @@ export default function MyProfileScreen() {
   };
 
   const handleAvatarPress = () => {
-    Alert.alert("Update Avatar", "Choose a photo", [
-      {
-        text: "Take Photo",
-        onPress: () => pickImage("camera"),
-      },
-      {
-        text: "Choose from Library",
-        onPress: () => pickImage("library"),
-      },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    pickImage("library");
   };
 
   const pickImage = async (source: "camera" | "library") => {
@@ -378,6 +368,12 @@ export default function MyProfileScreen() {
               </View>
             </Card>
           )}
+        {!editing && (
+          <SecondaryButton
+            title="Sign Out"
+            onPress={() => supabase.auth.signOut()}
+          />
+        )}
       </View>
     </KeyboardAwareScrollView>
   );

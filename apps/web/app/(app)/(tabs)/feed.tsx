@@ -168,10 +168,6 @@ export default function FeedScreen() {
     }, [fetchEvents])
   );
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-  };
-
   return (
     <View className="flex-1 bg-osu-light">
       <View className="bg-white px-4 py-3 border-b border-gray-200">
@@ -232,12 +228,6 @@ export default function FeedScreen() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={handleSignOut}
-            className="px-4 py-2 rounded-lg bg-gray-100"
-          >
-            <Text className="font-semibold text-osu-dark">Sign Out</Text>
-          </TouchableOpacity>
         </ScrollView>
       </View>
 
