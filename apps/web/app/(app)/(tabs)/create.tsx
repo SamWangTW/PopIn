@@ -85,6 +85,12 @@ const applyTimeToDate = (baseDate: Date, value: string): Date | null => {
   return next;
 };
 
+const toMinutePrecision = (date: Date): Date => {
+  const next = new Date(date);
+  next.setSeconds(0, 0);
+  return next;
+};
+
 const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
 const DEFAULT_EVENT_DURATION_MS = 60 * 60 * 1000;
 const PLACEHOLDER_COLOR = "#9ca3af";
@@ -114,6 +120,11 @@ export default function CreateEventScreen() {
   const [activePicker, setActivePicker] = useState<PickerTarget | null>(null);
   const [pickerValue, setPickerValue] = useState(oneHourLater);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const nowMinute = toMinutePrecision(new Date());
+  const maxStartDateTime = new Date(nowMinute.getTime() + FORTY_EIGHT_HOURS_MS);
+  const startAtMinute = toMinutePrecision(startDateTime);
+  const isStartTooFar = startAtMinute.getTime() > maxStartDateTime.getTime();
 
   useEffect(() => {
     if (endDateTime <= startDateTime) {
@@ -149,6 +160,16 @@ export default function CreateEventScreen() {
     if (target === "endDate") return startDateTime;
     if (target === "endTime") {
       return isSameDay(endDateTime, startDateTime) ? startDateTime : undefined;
+    }
+    return undefined;
+  };
+
+  const getPickerMaximumDate = (target: PickerTarget): Date | undefined => {
+    if (target === "startDate") return maxStartDateTime;
+    if (target === "startTime") {
+      return isSameDay(startDateTime, maxStartDateTime)
+        ? maxStartDateTime
+        : undefined;
     }
     return undefined;
   };
@@ -241,15 +262,6 @@ export default function CreateEventScreen() {
     </Text>
   );
 
-  const checkStartWithin48Hours = (date: Date) => {
-    if (date.getTime() - new Date().getTime() > FORTY_EIGHT_HOURS_MS) {
-      Alert.alert(
-        "Start Time Too Far",
-        "Please set the start time within 48 hours from now.",
-      );
-    }
-  };
-
   const applyPickerValue = (target: PickerTarget, selectedValue: Date) => {
     if (target === "startDate") {
       const updated = new Date(startDateTime);
@@ -259,7 +271,6 @@ export default function CreateEventScreen() {
         selectedValue.getDate(),
       );
       setStartDateTime(updated);
-      checkStartWithin48Hours(updated);
       return;
     }
 
@@ -267,7 +278,6 @@ export default function CreateEventScreen() {
       const updated = new Date(startDateTime);
       updated.setHours(selectedValue.getHours(), selectedValue.getMinutes(), 0, 0);
       setStartDateTime(updated);
-      checkStartWithin48Hours(updated);
       return;
     }
 
@@ -352,6 +362,8 @@ export default function CreateEventScreen() {
   };
 
   const handleReview = () => {
+    setReviewError(null);
+
     const requiredFieldErrors = validateRequiredFields();
     setFieldErrors(requiredFieldErrors);
 
@@ -376,15 +388,36 @@ export default function CreateEventScreen() {
       return;
     }
 
-    if (startDateTime.getTime() - new Date().getTime() > FORTY_EIGHT_HOURS_MS) {
-      Alert.alert("Error", "Start time must be within 48 hours from now");
+    if (isStartTooFar) {
+      setReviewError(
+        `Start time must be within 48 hours from now. Latest allowed: ${formatDate(maxStartDateTime)} ${formatTime(maxStartDateTime)}.`,
+      );
       return;
     }
 
     setShowConfirm(true);
   };
 
+  const snapStartToLatestAllowed = () => {
+    // Keep a 1-hour event while ensuring both start and end remain inside the 48-hour window.
+    const latestStartSlot = new Date(
+      maxStartDateTime.getTime() - DEFAULT_EVENT_DURATION_MS,
+    );
+    const latestEndSlot = new Date(maxStartDateTime);
+
+    setStartDateTime(latestStartSlot);
+    setEndDateTime(latestEndSlot);
+
+    setReviewError(null);
+  };
+
   const handleConfirm = async () => {
+    if (toMinutePrecision(startDateTime).getTime() > toMinutePrecision(new Date()).getTime() + FORTY_EIGHT_HOURS_MS) {
+      Alert.alert("Error", "Start time must be within 48 hours from now");
+      setShowConfirm(false);
+      return;
+    }
+
     const trimmedCapacity = capacity.trim();
     const capacityNum = trimmedCapacity ? parseInt(trimmedCapacity, 10) : null;
 
@@ -429,7 +462,7 @@ export default function CreateEventScreen() {
       setLoading(false);
 
       if (error) {
-        Alert.alert("Error", "Failed to save changes");
+        Alert.alert("Error", error.message || "Failed to save changes");
         console.error(error);
       } else {
         if (userId) {
@@ -497,7 +530,7 @@ export default function CreateEventScreen() {
       setLoading(false);
 
       if (error) {
-        Alert.alert("Error", "Failed to create event");
+        Alert.alert("Error", error.message || "Failed to create event");
         console.error(error);
       } else {
         getPostHog().capture('event_created', {
@@ -575,6 +608,7 @@ export default function CreateEventScreen() {
                 type="date"
                 value={toDateInputValue(startDateTime)}
                 min={toDateInputValue(new Date())}
+                max={toDateInputValue(maxStartDateTime)}
                 onChange={(event) =>
                   handleWebDateInputChange("startDate", event.currentTarget.value)
                 }
@@ -599,6 +633,11 @@ export default function CreateEventScreen() {
                 min={
                   isSameDay(startDateTime, new Date())
                     ? toTimeInputValue(new Date())
+                    : undefined
+                }
+                max={
+                  isSameDay(startDateTime, maxStartDateTime)
+                    ? toTimeInputValue(maxStartDateTime)
                     : undefined
                 }
                 onChange={(event) =>
@@ -752,6 +791,19 @@ export default function CreateEventScreen() {
             </View>
 
             <View className="px-5 pt-6">
+              {reviewError && (
+                <View className="mb-3 border border-red-200 bg-red-50 rounded-xl p-3">
+                  <Text className="text-red-700 text-sm">{reviewError}</Text>
+                  <Pressable
+                    className="mt-2 self-start bg-red-600 rounded-lg px-3 py-2"
+                    onPress={snapStartToLatestAllowed}
+                  >
+                    <Text className="text-white text-sm font-semibold">
+                      Use Latest Allowed Time
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
               <PrimaryButton
                 title={isEditMode ? "Review Changes" : "Review Event"}
                 onPress={handleReview}
@@ -781,6 +833,7 @@ export default function CreateEventScreen() {
                     mode={getPickerMode(activePicker)}
                     display={pickerDisplay}
                     minimumDate={getPickerMinimumDate(activePicker)}
+                    maximumDate={getPickerMaximumDate(activePicker)}
                     onChange={handlePickerValueChange}
                     {...(Platform.OS === "ios"
                       ? { themeVariant: "light" as const, textColor: "#111827" }
