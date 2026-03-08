@@ -3,7 +3,7 @@ import { View, Text, ScrollView, Alert, ActivityIndicator, TouchableOpacity, Ima
 import { useLocalSearchParams, router, useFocusEffect } from "expo-router";
 import { supabase } from "../../../lib/supabase";
 import { requestFeedRefresh } from "../../../lib/feedRefresh";
-import type { EventWithDetails } from "shared";
+import type { EventWithDetails, EventParticipant } from "shared";
 import { PrimaryButton, SecondaryButton } from "../../../components/Button";
 import { getPostHog, buildEventProps } from "../../../lib/posthog";
 
@@ -43,7 +43,7 @@ export default function EventDetailScreen() {
         `
         *,
         host:profiles!events_host_id_fkey(id, email, display_name, hosted_count),
-        event_members(user_id)
+        event_members(user_id, profile:profiles!event_members_user_id_fkey(id, email, display_name, avatar_url))
       `,
       )
       .eq("id", id)
@@ -61,6 +61,7 @@ export default function EventDetailScreen() {
         is_joined: userId
           ? data.event_members?.some((m: any) => m.user_id === userId)
           : false,
+        participants: data.event_members ?? [],
       };
       setEvent(eventWithDetails);
 
@@ -283,6 +284,23 @@ export default function EventDetailScreen() {
           ? "1 spot left"
           : `${spotsLeft} spots left`;
 
+  const participants = event.participants ?? [];
+  const avatarStack = participants.slice(0, 5);
+  const AVATAR_SIZE = 32;
+  const AVATAR_OVERLAP = 10;
+
+  const buildJoinSummary = () => {
+    if (participants.length === 0) return null;
+    const getName = (p: EventParticipant) =>
+      (p.profile?.display_name || p.profile?.email?.split("@")[0] || "Someone").split(" ")[0];
+    if (participants.length === 1) return `${getName(participants[0])} joined`;
+    if (participants.length === 2)
+      return `${getName(participants[0])} and ${getName(participants[1])} joined`;
+    const others = participants.length - 1;
+    return `${getName(participants[0])}, and ${others} other${others > 1 ? "s" : ""} joined`;
+  };
+  const joinSummary = buildJoinSummary();
+
   return (
     <ScrollView className="flex-1 bg-white">
       <View className="p-4" style={{ width: "100%", maxWidth: 920, alignSelf: "center" }}>
@@ -336,6 +354,63 @@ export default function EventDetailScreen() {
               <Text className="text-xs uppercase tracking-wide text-gray-500 font-semibold">👥 Capacity</Text>
               <Text className="text-osu-dark font-medium mt-1">{scarcityCopy}</Text>
             </View>
+
+            {participants.length > 0 && (
+              <TouchableOpacity
+                className="py-4 border-b border-gray-200 flex-row items-center"
+                onPress={() => router.push(`/(app)/participants?eventId=${event.id}`)}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={{
+                    width: AVATAR_SIZE + (avatarStack.length - 1) * (AVATAR_SIZE - AVATAR_OVERLAP),
+                    height: AVATAR_SIZE,
+                    position: "relative",
+                    marginRight: 10,
+                  }}
+                >
+                  {avatarStack.map((p, i) => {
+                    const initials = (
+                      p.profile?.display_name ||
+                      p.profile?.email?.split("@")[0] ||
+                      "?"
+                    ).trim().slice(0, 1).toUpperCase();
+                    return (
+                      <View
+                        key={p.user_id}
+                        style={{
+                          position: "absolute",
+                          left: i * (AVATAR_SIZE - AVATAR_OVERLAP),
+                          width: AVATAR_SIZE,
+                          height: AVATAR_SIZE,
+                          borderRadius: AVATAR_SIZE / 2,
+                          borderWidth: 2,
+                          borderColor: "#FFFFFF",
+                          overflow: "hidden",
+                          backgroundColor: "#BB0000",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          zIndex: avatarStack.length - i,
+                        }}
+                      >
+                        {p.profile?.avatar_url ? (
+                          <Image
+                            source={{ uri: p.profile.avatar_url }}
+                            style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}
+                          />
+                        ) : (
+                          <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>
+                            {initials}
+                          </Text>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+                <Text className="text-osu-dark text-sm flex-1">{joinSummary}</Text>
+                <Text className="text-gray-400 text-xs">See all →</Text>
+              </TouchableOpacity>
+            )}
 
             <View className="py-4 border-b border-gray-200">
               <Text className="text-xs uppercase tracking-wide text-gray-500 font-semibold">🎯 Host</Text>
