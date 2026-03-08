@@ -4,8 +4,7 @@ import "../global.css";
 import { supabase } from "../lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import { registerForPushNotifications } from "../lib/notifications";
-import * as Notifications from "expo-notifications";
-import { Modal, Platform, Pressable, Text, View } from "react-native";
+import { Modal, Pressable, Text, View } from "react-native";
 
 const SAFETY_REMINDER_TITLE = "Safety Reminder";
 const SAFETY_REMINDER_MESSAGE =
@@ -17,21 +16,6 @@ export default function RootLayout() {
   const [showSafetyReminder, setShowSafetyReminder] = useState(false);
   const segments = useSegments();
   const router = useRouter();
-
-  useEffect(() => {
-    // expo-notifications is not fully supported on web; guard setup to avoid runtime crashes.
-    if (Platform.OS === "web") return;
-
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldShowBanner: true,
-        shouldShowList: true,
-        shouldPlaySound: true,
-        shouldSetBadge: false,
-      }),
-    });
-  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {

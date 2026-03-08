@@ -13,6 +13,8 @@ import { supabase } from '../lib/supabase';
 import { getPostHog } from '../lib/posthog';
 import { PrimaryButton, SecondaryButton } from '../components/Button';
 
+const OSU_DOMAIN = '@osu.edu';
+
 export default function AuthScreen() {
     const [email, setEmail] = useState('');
     const [otp, setOtp] = useState('');
@@ -27,25 +29,45 @@ export default function AuthScreen() {
         }
     }, [cooldown]);
 
-    const validateEmail = (email: string) => {
-        return email.toLowerCase().endsWith('@osu.edu');
+    const normalizeOsuEmail = (value: string) => {
+        const cleaned = value.toLowerCase().trim();
+
+        if (!cleaned) return '';
+        if (cleaned.endsWith(OSU_DOMAIN)) return cleaned;
+        if (cleaned.includes('@')) return cleaned;
+
+        return `${cleaned}${OSU_DOMAIN}`;
+    };
+
+    const validateEmail = (value: string) => value.endsWith(OSU_DOMAIN);
+
+    const handleEmailChange = (value: string) => {
+        const cleaned = value.toLowerCase().trim();
+
+        if (cleaned.endsWith(OSU_DOMAIN)) {
+            setEmail(cleaned.slice(0, -OSU_DOMAIN.length));
+            return;
+        }
+
+        setEmail(cleaned);
     };
 
     const handleSendOTP = async () => {
-        if (!email.trim()) {
+        const normalizedEmail = normalizeOsuEmail(email);
+
+        if (!normalizedEmail) {
             Alert.alert('Error', 'Please enter your email');
             return;
         }
 
-        // Temporarily disabled OSU email validation for testing
-        // if (!validateEmail(email)) {
-        //   Alert.alert("Error", "Please use your @osu.edu email address");
-        //   return;
-        // }
+        if (!validateEmail(normalizedEmail)) {
+            Alert.alert('Error', 'Please use your @osu.edu email address');
+            return;
+        }
 
         setLoading(true);
         const { error } = await supabase.auth.signInWithOtp({
-            email: email.toLowerCase().trim(),
+            email: normalizedEmail,
         });
 
         setLoading(false);
@@ -60,15 +82,22 @@ export default function AuthScreen() {
     };
 
     const handleVerifyOTP = async () => {
+        const normalizedEmail = normalizeOsuEmail(email);
+
         if (!otp.trim()) {
             Alert.alert('Error', 'Please enter the verification code');
+            return;
+        }
+
+        if (!normalizedEmail || !validateEmail(normalizedEmail)) {
+            Alert.alert('Error', 'Please enter a valid @osu.edu email');
             return;
         }
 
         setLoading(true);
         try {
             const { data, error } = await supabase.auth.verifyOtp({
-                email: email.toLowerCase().trim(),
+                email: normalizedEmail,
                 token: otp.trim(),
                 type: 'email',
             });
@@ -83,10 +112,9 @@ export default function AuthScreen() {
                     email: data.user.email ?? null,
                 });
 
-                // Create profile if it doesn't exist
-                // @ts-expect-error - Supabase type inference issue
-                const { error: profileError } = await supabase
-                    .from('profiles')
+                // Create profile if it doesn't exist.
+                const { error: profileError } = await (supabase
+                    .from('profiles') as any)
                     .upsert(
                         {
                             id: data.user.id,
@@ -147,14 +175,20 @@ export default function AuthScreen() {
                                 </Text>
                                 <TextInput
                                     className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-4 mb-6 text-base"
-                                    placeholder="name.#@osu.edu"
+                                    placeholder="name.#"
                                     placeholderTextColor="#6B7280"
                                     value={email}
-                                    onChangeText={setEmail}
+                                    onChangeText={handleEmailChange}
                                     autoCapitalize="none"
                                     keyboardType="email-address"
+                                    autoComplete="email"
+                                    textContentType="emailAddress"
                                     editable={!loading}
                                 />
+
+                                <Text className="text-gray-500 text-sm -mt-4 mb-6">
+                                    @{'osu.edu'}
+                                </Text>
 
                                 <PrimaryButton
                                     title={
@@ -174,7 +208,7 @@ export default function AuthScreen() {
                         ) : (
                             <>
                                 <Text className="text-gray-600 mb-4">
-                                    Enter the 6-digit code sent to {email}
+                                    Enter the 6-digit code sent to {normalizeOsuEmail(email)}
                                 </Text>
 
                                 <Text className="text-osu-dark mb-2 font-medium">
