@@ -9,6 +9,45 @@ import { Modal, Pressable, Text, View } from "react-native";
 const SAFETY_REMINDER_TITLE = "Safety Reminder";
 const SAFETY_REMINDER_MESSAGE =
   "PopIn connects OSU students. Everyone is verified with an @osu.edu email. Always meet in public campus spaces.";
+const SAFETY_DISMISSED_KEY_PREFIX = "safety-reminder-dismissed:";
+
+const getSafetyDismissedKey = (userId: string) =>
+  `${SAFETY_DISMISSED_KEY_PREFIX}${userId}`;
+
+const hasDismissedSafetyReminder = (userId: string): boolean => {
+  try {
+    return globalThis.sessionStorage?.getItem(getSafetyDismissedKey(userId)) === "1";
+  } catch {
+    return false;
+  }
+};
+
+const markSafetyReminderDismissed = (userId: string) => {
+  try {
+    globalThis.sessionStorage?.setItem(getSafetyDismissedKey(userId), "1");
+  } catch {
+    // Ignore storage failures so auth flow never breaks.
+  }
+};
+
+const clearSafetyReminderDismissedFlags = () => {
+  try {
+    const storage = globalThis.sessionStorage;
+    if (!storage) return;
+
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < storage.length; i += 1) {
+      const key = storage.key(i);
+      if (key?.startsWith(SAFETY_DISMISSED_KEY_PREFIX)) {
+        keysToRemove.push(key);
+      }
+    }
+
+    keysToRemove.forEach((key) => storage.removeItem(key));
+  } catch {
+    // Ignore storage failures so auth flow never breaks.
+  }
+};
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
@@ -30,11 +69,20 @@ export default function RootLayout() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
+
+      if (event === "SIGNED_OUT") {
+        clearSafetyReminderDismissedFlags();
+      }
+
       if (session?.user?.id) {
         registerForPushNotifications(session.user.id);
       }
 
-      if (event === "SIGNED_IN") {
+      if (
+        event === "SIGNED_IN" &&
+        session?.user?.id &&
+        !hasDismissedSafetyReminder(session.user.id)
+      ) {
         setShowSafetyReminder(true);
       }
     });
@@ -54,6 +102,13 @@ export default function RootLayout() {
     }
   }, [session, segments, loading]);
 
+  const dismissSafetyReminder = () => {
+    if (session?.user?.id) {
+      markSafetyReminderDismissed(session.user.id);
+    }
+    setShowSafetyReminder(false);
+  };
+
   return (
     <>
       <Slot />
@@ -61,7 +116,7 @@ export default function RootLayout() {
         visible={showSafetyReminder}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowSafetyReminder(false)}
+        onRequestClose={dismissSafetyReminder}
       >
         <View
           style={{
@@ -77,7 +132,7 @@ export default function RootLayout() {
 
             <Pressable
               className="mt-6 bg-osu-scarlet rounded-xl py-3 items-center"
-              onPress={() => setShowSafetyReminder(false)}
+              onPress={dismissSafetyReminder}
             >
               <Text className="text-white font-semibold">Got it</Text>
             </Pressable>
