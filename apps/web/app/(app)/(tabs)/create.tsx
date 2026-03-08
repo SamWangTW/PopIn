@@ -117,6 +117,7 @@ export default function CreateEventScreen() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [eventPhoto, setEventPhoto] = useState<{ uri: string; base64: string; mimeType: string } | null>(null);
 
+  const [currentAttendeeCount, setCurrentAttendeeCount] = useState(0);
   const [activePicker, setActivePicker] = useState<PickerTarget | null>(null);
   const [pickerValue, setPickerValue] = useState(oneHourLater);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -214,6 +215,13 @@ export default function CreateEventScreen() {
       setCapacity(data.capacity ? String(data.capacity) : "");
       setDescription(data.description || "");
       setExistingImageUrl(data.image_url || null);
+
+      const { count } = await (supabase
+        .from("event_members")
+        .select("*", { count: "exact", head: true })
+        .eq("event_id", editId) as any);
+      setCurrentAttendeeCount(count ?? 0);
+
       setEditLoading(false);
     });
   }, [editId]);
@@ -375,6 +383,14 @@ export default function CreateEventScreen() {
     const capacityNum = trimmedCapacity ? parseInt(trimmedCapacity, 10) : null;
     if (trimmedCapacity && (capacityNum == null || isNaN(capacityNum) || capacityNum < 2)) {
       Alert.alert("Error", "Capacity must be at least 2 (you as the host + at least 1 attendee), or leave blank for unlimited");
+      return;
+    }
+
+    if (isEditMode && capacityNum != null && capacityNum < currentAttendeeCount) {
+      Alert.alert(
+        "Capacity Too Low",
+        `This event already has ${currentAttendeeCount} attendee${currentAttendeeCount !== 1 ? "s" : ""}. New capacity must be at least ${currentAttendeeCount}.`,
+      );
       return;
     }
 
