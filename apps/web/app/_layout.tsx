@@ -4,11 +4,11 @@ import "../global.css";
 import { supabase } from "../lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import { registerForPushNotifications } from "../lib/notifications";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 const SAFETY_REMINDER_TITLE = "Safety Reminder";
 const SAFETY_REMINDER_MESSAGE =
-  "PopIn connects OSU students. Everyone is verified with an @osu.edu email. Always meet in public campus spaces.";
+  "Be cautious when meeting people from PopIn. Events started with [Testing] and hosted by popin-team are for testing only.";
 const SAFETY_DISMISSED_KEY_PREFIX = "safety-reminder-dismissed:";
 
 const getSafetyDismissedKey = (userId: string) =>
@@ -112,33 +112,42 @@ export default function RootLayout() {
   return (
     <>
       <Slot />
-      <Modal
-        visible={showSafetyReminder}
-        transparent
-        animationType="fade"
-        onRequestClose={dismissSafetyReminder}
-      >
+      {showSafetyReminder ? (
         <View
+          pointerEvents="box-none"
           style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.45)",
-            justifyContent: "center",
-            paddingHorizontal: 20,
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: 0,
+            paddingHorizontal: 16,
+            paddingTop: 8,
           }}
         >
-          <View className="bg-white rounded-2xl p-6">
-            <Text className="text-xl font-bold text-osu-dark mb-3">{SAFETY_REMINDER_TITLE}</Text>
-            <Text className="text-base text-gray-700 leading-6">{SAFETY_REMINDER_MESSAGE}</Text>
+          <View className="bg-white rounded-xl p-3 border border-gray-200 shadow-lg self-center w-full max-w-2xl">
+            <View className="flex-row items-center justify-between mb-1">
+              <Text className="text-base font-semibold text-osu-dark">{SAFETY_REMINDER_TITLE}</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close safety reminder"
+                className="w-7 h-7 items-center justify-center rounded-full bg-gray-100"
+                onPress={dismissSafetyReminder}
+              >
+                <Text className="text-sm font-semibold text-gray-600">X</Text>
+              </Pressable>
+            </View>
+
+            <Text className="text-sm text-gray-700 leading-5">{SAFETY_REMINDER_MESSAGE}</Text>
 
             <Pressable
-              className="mt-6 bg-osu-scarlet rounded-xl py-3 items-center"
+              className="mt-2 bg-osu-scarlet rounded-lg py-2 items-center"
               onPress={dismissSafetyReminder}
             >
-              <Text className="text-white font-semibold">Got it</Text>
+              <Text className="text-white text-sm font-semibold">Got it</Text>
             </Pressable>
           </View>
         </View>
-      </Modal>
+      ) : null}
     </>
   );
 }
