@@ -215,6 +215,14 @@ export default function CreateEventScreen() {
     </Text>
   );
 
+  const clampStartDateTime = (dt: Date): Date => {
+    const now = toMinutePrecision(new Date());
+    const max = new Date(now.getTime() + FORTY_EIGHT_HOURS_MS);
+    if (dt < now) return new Date(now);
+    if (dt > max) return new Date(max);
+    return dt;
+  };
+
   const applyPickerValue = (target: PickerTarget, selectedValue: Date) => {
     if (target === "startDate") {
       const updated = new Date(startDateTime);
@@ -223,14 +231,24 @@ export default function CreateEventScreen() {
         selectedValue.getMonth(),
         selectedValue.getDate(),
       );
-      setStartDateTime(updated);
+      const clamped = clampStartDateTime(updated);
+      setStartDateTime(clamped);
+      // Also push end forward if it's no longer after start
+      if (endDateTime <= clamped) {
+        setEndDateTime(new Date(clamped.getTime() + DEFAULT_EVENT_DURATION_MS));
+      }
       return;
     }
 
     if (target === "startTime") {
       const updated = new Date(startDateTime);
       updated.setHours(selectedValue.getHours(), selectedValue.getMinutes(), 0, 0);
-      setStartDateTime(updated);
+      const clamped = clampStartDateTime(updated);
+      setStartDateTime(clamped);
+      // Also push end forward if it's no longer after start
+      if (endDateTime <= clamped) {
+        setEndDateTime(new Date(clamped.getTime() + DEFAULT_EVENT_DURATION_MS));
+      }
       return;
     }
 
@@ -395,8 +413,8 @@ export default function CreateEventScreen() {
           if (orig) {
             const changedFields: string[] = [];
             if (
-              startDateTime.toISOString() !== orig.start_time ||
-              endDateTime.toISOString() !== orig.end_time
+              startDateTime.toISOString() !== new Date(orig.start_time).toISOString() ||
+              endDateTime.toISOString() !== new Date(orig.end_time).toISOString()
             ) {
               changedFields.push("Time changed");
             }
@@ -552,6 +570,15 @@ export default function CreateEventScreen() {
               }
               className="web-datetime-input"
             />
+            {isStartTooFar ? (
+              <Text className="text-red-500 text-xs mt-2">
+                ⚠ Start time must be within 48 hours from now.
+              </Text>
+            ) : (
+              <Text className="text-gray-400 text-xs mt-2">
+                Events must start within 48 hours from now.
+              </Text>
+            )}
             </View>
 
             <View className="px-5 py-4 border-b border-gray-200">
