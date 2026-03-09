@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import { View } from 'react-native';
+import { View, Text } from 'react-native';
 import { useEffect, useState } from 'react';
 import { getUnreadNotificationCount } from '../../../lib/notifications';
 import { registerBadgeRefresh } from '../../../lib/notifBadge';
@@ -8,21 +8,17 @@ import { registerBadgeRefresh } from '../../../lib/notifBadge';
 const renderTabIcon = (
     name: React.ComponentProps<typeof MaterialIcons>['name'],
     color: string,
+    label: string,
 ) => (
     <View
         style={{
-            width: 32,
-            height: 32,
             alignItems: 'center',
             justifyContent: 'center',
+            gap: 2,
         }}
     >
-        <MaterialIcons
-            name={name}
-            size={28}
-            color={color}
-            style={{ transform: [{ translateY: 5 }] }}
-        />
+        <MaterialIcons name={name} size={24} color={color} />
+        <Text numberOfLines={1} style={{ color, fontSize: 10, fontWeight: '500' }}>{label}</Text>
     </View>
 );
 
@@ -48,9 +44,9 @@ export default function TabsLayout() {
                 tabBarStyle: {
                     backgroundColor: '#FFFFFF',
                     borderTopWidth: 0,
-                    height: 66,
-                    paddingTop: 0,
-                    paddingBottom: 0,
+                    height: 72,
+                    paddingTop: 4,
+                    paddingBottom: 6,
                     elevation: 0,
                     shadowColor: '#000',
                     shadowOffset: { width: 0, height: -2 },
@@ -59,16 +55,23 @@ export default function TabsLayout() {
                 },
                 tabBarItemStyle: {
                     flex: 1,
+                    flexDirection: 'column',
                     paddingTop: 4,
-                    paddingBottom: 0,
+                    paddingBottom: 4,
                     alignItems: 'center',
                     justifyContent: 'center',
+                    gap: 2,
                 },
                 tabBarIconStyle: {
                     margin: 0,
-                    width: 32,
-                    height: 32,
+                    width: 28,
+                    height: 28,
                     alignSelf: 'center',
+                },
+                tabBarLabelStyle: {
+                    fontSize: 10,
+                    fontWeight: '500',
+                    marginTop: 2,
                 },
                 sceneStyle: {},
                 headerStyle: {
@@ -86,7 +89,7 @@ export default function TabsLayout() {
                 options={{
                     title: 'Feed',
                     tabBarIcon: ({ color, focused }) =>
-                        renderTabIcon(focused ? 'home-filled' : 'home', color),
+                        renderTabIcon(focused ? 'home-filled' : 'home', color, 'Feed'),
                 }}
             />
             <Tabs.Screen
@@ -94,7 +97,7 @@ export default function TabsLayout() {
                 options={{
                     title: 'Create Event',
                     tabBarIcon: ({ color, focused }) =>
-                        renderTabIcon(focused ? 'add-box' : 'add-box', color),
+                        renderTabIcon('add-box', color, 'Create'),
                 }}
             />
             <Tabs.Screen
@@ -102,7 +105,7 @@ export default function TabsLayout() {
                 options={{
                     title: 'My Events',
                     tabBarIcon: ({ color, focused }) =>
-                        renderTabIcon(focused ? 'event' : 'event-note', color),
+                        renderTabIcon(focused ? 'event' : 'event-note', color, 'My Events'),
                     tabBarBadge: notifCount > 0 ? (notifCount > 9 ? '9+' : notifCount) : undefined,
                     tabBarBadgeStyle: { backgroundColor: '#BB0000', fontSize: 10 },
                 }}
@@ -112,18 +115,15 @@ export default function TabsLayout() {
                 options={{
                     title: 'Feedback',
                     tabBarIcon: ({ color, focused }) =>
-                        renderTabIcon(focused ? 'forum' : 'feedback', color),
+                        renderTabIcon(focused ? 'forum' : 'feedback', color, 'Feedback'),
                 }}
             />
             <Tabs.Screen
                 name="my-profile"
                 options={{
                     title: 'My Profile',
-                    tabBarIcon: ({ color, focused }) =>
-                        renderTabIcon(
-                            focused ? 'account-circle' : 'account-circle',
-                            color,
-                        ),
+                    tabBarIcon: ({ color }) =>
+                        renderTabIcon('account-circle', color, 'Profile'),
                 }}
             />
         </Tabs>
