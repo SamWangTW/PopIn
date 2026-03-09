@@ -10,8 +10,8 @@ type TopTab = "hosting" | "joined";
 type TimeFilter = "now" | "upcoming" | "past";
 
 const TOP_TABS: Array<{ value: TopTab; label: string }> = [
-  { value: "hosting", label: "Hosting" },
-  { value: "joined", label: "Joined" },
+  { value: "hosting", label: "Host" },
+  { value: "joined", label: "Join" },
 ];
 
 const TIME_FILTERS: Array<{ value: TimeFilter; label: string }> = [
