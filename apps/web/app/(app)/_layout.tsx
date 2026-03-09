@@ -33,10 +33,10 @@ export default function AppLayout() {
                         headerBackVisible: false,
                         headerLeft: () => (
                             <TouchableOpacity
-                                onPress={() => router.replace('/(app)/(tabs)/feed')}
+                                onPress={() => router.back()}
                                 style={{ paddingHorizontal: 6, paddingVertical: 4 }}
                                 accessibilityRole="button"
-                                accessibilityLabel="Back to feed"
+                                accessibilityLabel="Go back"
                             >
                                 <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
                             </TouchableOpacity>

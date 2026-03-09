@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { useLocalSearchParams, router } from "expo-router";
 import { supabase } from "../../../lib/supabase";
 import { uploadEventPhoto } from "../../../lib/storage";
 import { requestFeedRefresh } from "../../../lib/feedRefresh";
+import { createNotificationsForAttendees } from "../../../lib/notifications";
 import { getPostHog } from "../../../lib/posthog";
 import { PrimaryButton, SecondaryButton } from "../../../components/Button";
 
@@ -113,6 +114,13 @@ export default function CreateEventScreen() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [eventPhoto, setEventPhoto] = useState<{ uri: string; base64: string; mimeType: string } | null>(null);
 
+  const originalEventRef = useRef<{
+    start_time: string;
+    end_time: string;
+    location_text: string;
+    description: string | null;
+  } | null>(null);
+
   const [currentAttendeeCount, setCurrentAttendeeCount] = useState(0);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showRangeWarning, setShowRangeWarning] = useState(false);
@@ -156,6 +164,12 @@ export default function CreateEventScreen() {
       setCapacity(data.capacity ? String(data.capacity) : "");
       setDescription(data.description || "");
       setExistingImageUrl(data.image_url || null);
+      originalEventRef.current = {
+        start_time: data.start_time,
+        end_time: data.end_time,
+        location_text: data.location_text,
+        description: data.description ?? null,
+      };
 
       (supabase
         .from("event_members")
@@ -213,6 +227,12 @@ export default function CreateEventScreen() {
     </Text>
   );
 
+  const clampStartDateTime = (dt: Date): Date => {
+    const now = toMinutePrecision(new Date());
+    const max = new Date(now.getTime() + FORTY_EIGHT_HOURS_MS);
+    if (dt < now) return new Date(now);
+    if (dt > max) return new Date(max);
+    return dt;
   const notifyStartRangeViolation = (maxAllowed: Date) => {
     setRangeWarningMessage(
       `Start time must be between now and ${formatDate(maxAllowed)} ${formatTime(maxAllowed)}.`,
@@ -238,6 +258,11 @@ export default function CreateEventScreen() {
         selectedValue.getDate(),
       );
       const clamped = clampStartDateTime(updated);
+      setStartDateTime(clamped);
+      // Also push end forward if it's no longer after start
+      if (endDateTime <= clamped) {
+        setEndDateTime(new Date(clamped.getTime() + DEFAULT_EVENT_DURATION_MS));
+      }
       if (clamped.getTime() !== updated.getTime()) {
         notifyStartRangeViolation(boundedMaxStart);
       }
@@ -249,6 +274,11 @@ export default function CreateEventScreen() {
       const updated = new Date(startDateTime);
       updated.setHours(selectedValue.getHours(), selectedValue.getMinutes(), 0, 0);
       const clamped = clampStartDateTime(updated);
+      setStartDateTime(clamped);
+      // Also push end forward if it's no longer after start
+      if (endDateTime <= clamped) {
+        setEndDateTime(new Date(clamped.getTime() + DEFAULT_EVENT_DURATION_MS));
+      }
       if (clamped.getTime() !== updated.getTime()) {
         notifyStartRangeViolation(boundedMaxStart);
       }
@@ -419,6 +449,32 @@ export default function CreateEventScreen() {
               else console.log("[push] update notification sent");
             })
             .catch((err) => console.warn("[push] update notify failed:", err));
+
+          // Detect which meaningful fields changed and notify attendees
+          const orig = originalEventRef.current;
+          if (orig) {
+            const changedFields: string[] = [];
+            if (
+              startDateTime.toISOString() !== new Date(orig.start_time).toISOString() ||
+              endDateTime.toISOString() !== new Date(orig.end_time).toISOString()
+            ) {
+              changedFields.push("Time changed");
+            }
+            if (location.trim() !== orig.location_text) {
+              changedFields.push("Location changed");
+            }
+            if ((description.trim() || null) !== orig.description) {
+              changedFields.push("Description updated");
+            }
+            if (changedFields.length > 0) {
+              createNotificationsForAttendees(
+                editId,
+                userId,
+                "event_updated",
+                changedFields
+              ).catch((err) => console.warn("[notif] update notify failed:", err));
+            }
+          }
         }
         setShowConfirm(false);
         if (Platform.OS === "web") {
@@ -556,6 +612,15 @@ export default function CreateEventScreen() {
               }
               className="web-datetime-input"
             />
+            {isStartTooFar ? (
+              <Text className="text-red-500 text-xs mt-2">
+                ⚠ Start time must be within 48 hours from now.
+              </Text>
+            ) : (
+              <Text className="text-gray-400 text-xs mt-2">
+                Events must start within 48 hours from now.
+              </Text>
+            )}
             </View>
 
             <View className="px-5 py-4 border-b border-gray-200">

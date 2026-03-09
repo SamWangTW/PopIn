@@ -3,6 +3,13 @@ import { View, Text, ScrollView, Alert, ActivityIndicator, TouchableOpacity, Ima
 import { useLocalSearchParams, router, useFocusEffect } from "expo-router";
 import { supabase } from "../../../lib/supabase";
 import { requestFeedRefresh } from "../../../lib/feedRefresh";
+import {
+  getEventNotifications,
+  markEventNotificationsRead,
+  createNotificationsForAttendees,
+  type EventNotification,
+} from "../../../lib/notifications";
+import { triggerBadgeRefresh } from "../../../lib/notifBadge";
 import type { EventWithDetails, EventParticipant } from "shared";
 import { PrimaryButton, SecondaryButton } from "../../../components/Button";
 import { getPostHog, buildEventProps } from "../../../lib/posthog";
@@ -23,6 +30,8 @@ export default function EventDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [eventNotifications, setEventNotifications] = useState<EventNotification[]>([]);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   // Refs to prevent duplicate analytics fires
   const detailOpenedFired = useRef(false);
   // const attendedFired = useRef(false);
@@ -96,6 +105,13 @@ export default function EventDetailScreen() {
     useCallback(() => {
       if (id && userId) {
         fetchEvent();
+        // Fetch and immediately mark notifications as read for attendees
+        getEventNotifications(id).then((notifs) => {
+          setEventNotifications(notifs);
+          if (notifs.length > 0) {
+            markEventNotificationsRead(id).then(() => triggerBadgeRefresh());
+          }
+        });
       }
     }, [id, userId])
   );
@@ -167,6 +183,16 @@ export default function EventDetailScreen() {
 
     setActionLoading(true);
     try {
+      // Notify attendees BEFORE cancelling — the events SELECT policy only
+      // allows status='active', so the notification INSERT RLS check would
+      // fail after cancel_event changes the status to 'canceled'.
+      await createNotificationsForAttendees(
+        event.id,
+        userId,
+        "event_cancelled",
+        ["Event cancelled"]
+      ).catch((err) => console.warn("[notif] cancel notify failed:", err));
+
       const { error } = await supabase.rpc("cancel_event", {
         p_event_id: event.id,
       } as any);
@@ -193,31 +219,12 @@ export default function EventDetailScreen() {
 
   const handleCancelEvent = () => {
     if (!event || !userId) return;
+    setShowCancelConfirm(true);
+  };
 
-    if (Platform.OS === "web") {
-      const confirmed = globalThis.confirm?.(
-        "Are you sure you want to cancel this event? All attendees will be notified.",
-      );
-      if (confirmed) {
-        void executeCancelEvent();
-      }
-      return;
-    }
-
-    Alert.alert(
-      "Cancel Event",
-      "Are you sure you want to cancel this event? All attendees will be notified.",
-      [
-        { text: "Keep Event", style: "cancel" },
-        {
-          text: "Cancel Event",
-          style: "destructive",
-          onPress: () => {
-            void executeCancelEvent();
-          },
-        },
-      ],
-    );
+  const handleConfirmCancel = () => {
+    setShowCancelConfirm(false);
+    void executeCancelEvent();
   };
 
   if (!id) return null;
@@ -301,10 +308,61 @@ export default function EventDetailScreen() {
   };
   const joinSummary = buildJoinSummary();
 
+  const latestNotif = eventNotifications[0] ?? null;
+  const isAttendee = !isHost && event.is_joined;
+  const isCanceled = (event as any).status === "canceled";
+
+  const timeAgo = (dateStr: string) => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  };
+
   return (
     <ScrollView className="flex-1 bg-white">
       <View className="p-4" style={{ width: "100%", maxWidth: 920, alignSelf: "center" }}>
         <View className="p-0 overflow-hidden">
+          {/* Cancelled banner — host view (grey, permanent) */}
+          {isHost && isCanceled && (
+            <View className="mx-5 mt-5 bg-gray-100 border border-gray-200 rounded-xl px-4 py-3 mb-2 flex-row items-center gap-3">
+              <Text className="text-base">🚫</Text>
+              <Text className="text-sm font-medium text-gray-600">
+                This event has been cancelled
+              </Text>
+            </View>
+          )}
+
+          {/* Cancelled banner — attendee view (red, permanent based on status) */}
+          {isAttendee && isCanceled && (
+            <View
+              className="mx-5 mt-5 rounded-xl px-4 py-3 mb-2 flex-row items-center gap-3"
+              style={{ backgroundColor: "#BB0000" }}
+            >
+              <Text className="text-base">✕</Text>
+              <Text className="text-sm font-semibold text-white">
+                This event has been cancelled by the host
+              </Text>
+            </View>
+          )}
+
+          {/* Update notification banner — attendee only, disappears after read */}
+          {isAttendee && !isCanceled && latestNotif?.type === "event_updated" && (
+            <View className="mx-5 mt-5 bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-2 flex-row items-start gap-3">
+              <Text className="text-base mt-0.5">🔔</Text>
+              <View>
+                <Text className="text-sm font-semibold text-osu-scarlet">
+                  Updated by host
+                </Text>
+                <Text className="text-xs text-gray-600 mt-0.5">
+                  {latestNotif.changed_fields.join(" · ")} · {timeAgo(latestNotif.created_at)}
+                </Text>
+              </View>
+            </View>
+          )}
+
           <View className="p-5 pb-4">
             <Text className="text-3xl font-bold text-osu-dark mb-2">
               {event.title}
@@ -433,46 +491,89 @@ export default function EventDetailScreen() {
 
             <View className="pt-6 mt-2">
               {!isHost ? (
-                <View style={{ gap: 10 }}>
-                  {event.is_joined ? (
-                    <PrimaryButton
-                      title="Leave Event"
-                      onPress={handleLeave}
-                      loading={actionLoading}
-                    />
-                  ) : (
-                    <>
+                !isCanceled && (
+                  <View style={{ gap: 10 }}>
+                    {event.is_joined ? (
                       <PrimaryButton
-                        title="Join Event"
-                        onPress={handleJoin}
-                        disabled={isFull}
+                        title="Leave Event"
+                        onPress={handleLeave}
                         loading={actionLoading}
                       />
-                      <Text className="text-gray-400 text-xs text-center">
-                        You can leave anytime
-                      </Text>
-                    </>
-                  )}
-                </View>
+                    ) : (
+                      <>
+                        <PrimaryButton
+                          title="Join Event"
+                          onPress={handleJoin}
+                          disabled={isFull}
+                          loading={actionLoading}
+                        />
+                        <Text className="text-gray-400 text-xs text-center">
+                          You can leave anytime
+                        </Text>
+                      </>
+                    )}
+                  </View>
+                )
               ) : (
-                <View style={{ gap: 10 }}>
-                  <PrimaryButton
-                    title="Edit Event"
-                    onPress={() => router.push(`/(app)/edit-event?editId=${event.id}`)}
-                    loading={false}
-                  />
-                  <SecondaryButton
-                    title="Cancel Event"
-                    onPress={handleCancelEvent}
-                    loading={actionLoading}
-                  />
-                  <Text className="text-gray-500 text-xs text-center mt-1">You are hosting this event</Text>
-                </View>
+                !isCanceled && (
+                  <View style={{ gap: 10 }}>
+                    <PrimaryButton
+                      title="Edit Event"
+                      onPress={() => router.push(`/(app)/edit-event?editId=${event.id}`)}
+                      loading={false}
+                    />
+                    <SecondaryButton
+                      title="Cancel Event"
+                      onPress={handleCancelEvent}
+                      loading={actionLoading}
+                    />
+                    <Text className="text-gray-500 text-xs text-center mt-1">You are hosting this event</Text>
+                  </View>
+                )
               )}
             </View>
           </View>
         </View>
       </View>
+
+      {/* Cancel confirmation dialog */}
+      {showCancelConfirm && (
+        <View
+          style={{
+            position: "absolute",
+            top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+            padding: 16,
+          }}
+        >
+          <View className="bg-white rounded-2xl p-6 w-full" style={{ maxWidth: 360 }}>
+            <Text className="text-lg font-bold text-osu-dark mb-2">
+              Cancel this event?
+            </Text>
+            <Text className="text-sm text-gray-500 mb-6">
+              All attendees will be notified. This can't be undone.
+            </Text>
+            <View className="flex-row gap-3">
+              <TouchableOpacity
+                onPress={() => setShowCancelConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 items-center"
+              >
+                <Text className="text-sm font-semibold text-gray-700">Keep event</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleConfirmCancel}
+                className="flex-1 py-2.5 rounded-xl items-center"
+                style={{ backgroundColor: "#BB0000" }}
+              >
+                <Text className="text-sm font-semibold text-white">Yes, cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </ScrollView>
   );
 }
