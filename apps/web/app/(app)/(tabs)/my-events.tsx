@@ -227,15 +227,19 @@ export default function MyEventsScreen() {
           visibleEvents.map((event) => {
             const notifType = unreadMap.get(event.id);
             const isCanceled = (event as any).status === "canceled";
+            const hasUnreadCancellation = notifType === "event_cancelled";
             // isUpdated is notification-based (disappears after read)
             const isUpdated = !isCanceled && notifType === "event_updated";
             const isHostTab = topTab === "hosting";
+            // Grey out only after the attendee has opened the event (notification read)
+            // For host tab, always grey out cancelled events
+            const shouldGrayOut = isCanceled && (isHostTab || !hasUnreadCancellation);
 
             return (
               <View
                 key={event.id}
                 className="mx-4 mb-4"
-                style={isCanceled ? { opacity: 0.6 } : undefined}
+                style={shouldGrayOut ? { opacity: 0.6 } : undefined}
               >
                 {/* Status pill — permanent based on event.status */}
                 {isCanceled && (
