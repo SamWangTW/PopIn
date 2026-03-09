@@ -126,9 +126,8 @@ export default function FeedScreen() {
 
     useFocusEffect(
         useCallback(() => {
-            if (consumeFeedRefreshRequest()) {
-                fetchEvents(true);
-            }
+            consumeFeedRefreshRequest(); // clear any pending flag
+            fetchEvents(true);
         }, [fetchEvents]),
     );
 

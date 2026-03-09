@@ -81,11 +81,12 @@ export default function MyEventsScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      if (userId) fetchMyEvents();
       return () => {
         // Refresh badge when leaving My Events (notifications may have been read)
         triggerBadgeRefresh();
       };
-    }, [])
+    }, [userId])
   );
 
   const fetchMyEvents = async () => {
