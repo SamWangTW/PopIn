@@ -18,6 +18,7 @@ An event discovery and management platform for OSU students, built as a pnpm mon
 - Root `package.json`: workspace-level scripts (`mobile`, `web`, etc.)
 
 ## Architecture
+![Architecture Diagram](doc/architecture.png)
 
 ## Features
 
