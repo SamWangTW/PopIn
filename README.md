@@ -17,6 +17,8 @@ An event discovery and management platform for OSU students, built as a pnpm mon
 - `supabase`: SQL migrations and edge functions
 - Root `package.json`: workspace-level scripts (`mobile`, `web`, etc.)
 
+## Architecture
+
 ## Features
 
 - **Auth**: Email OTP, restricted to @osu.edu
